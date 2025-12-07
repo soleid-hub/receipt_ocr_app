@@ -1,0 +1,8 @@
+streamlit
+paddlepaddle
+paddleocr
+sqlalchemy
+google-generativeai
+ruff
+opencv-python-headless
+python-dotenv
