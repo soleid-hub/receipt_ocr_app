@@ -6,3 +6,5 @@ google-generativeai
 ruff
 opencv-python-headless
 python-dotenv
+pandas
+watchdog
