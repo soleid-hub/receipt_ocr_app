@@ -2,13 +2,16 @@ from sqlalchemy import Column, Integer, String, Date, JSON, DateTime
 from sqlalchemy.orm import DeclarativeBase
 from datetime import datetime
 
+
 class Base(DeclarativeBase):
     pass
+
 
 class Receipt(Base):
     """
     receiptsテーブルのスキーマ定義
     """
+
     __tablename__ = "receipts"
 
     id = Column(Integer, primary_key=True, autoincrement=True)

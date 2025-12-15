@@ -8,6 +8,7 @@ from paddleocr import PaddleOCR
 # ログ設定
 logging.getLogger("ppocr").setLevel(logging.WARNING)
 
+
 class OCRProcessor:
     def __init__(self, lang: str = "japan"):
         self.ocr = PaddleOCR(use_angle_cls=True, lang=lang)
@@ -18,7 +19,7 @@ class OCRProcessor:
         if not os.path.exists(image_path):
             print(f"Error: File not found at {image_path}")
             return ""
-        
+
         try:
             # 画像読み込み、BGR変換
             pil_img = Image.open(image_path)
@@ -30,13 +31,13 @@ class OCRProcessor:
         except Exception as e:
             print(f"Error loading image: {e}")
             return ""
-        
+
         # OCR実行
         result = self.ocr.ocr(img_bgr)
 
         if result is None:
             return ""
-        
+
         extracted_texts = []
 
         try:
@@ -49,7 +50,7 @@ class OCRProcessor:
                     print("Debug: Detected Dictionary format output.")
                     rec_texts = first_item["rec_texts"]
                     return "\n".join(rec_texts)
-                
+
                 # リストのリストで返ってくる場合
                 elif isinstance(first_item, list):
                     print("Debug: Detected List format output.")
@@ -61,18 +62,14 @@ class OCRProcessor:
                                 extracted_texts.append(text)
 
                 else:
-                    print(f"Debug: Unknown result format inside list: {type(first_item)}")
+                    print(
+                        f"Debug: Unknown result format inside list: {type(first_item)}"
+                    )
             else:
                 print("Debug: Result list is empty.")
-            
+
         except Exception as e:
             print(f"Debug Error parsing result: {e}")
             return ""
-        
+
         return "\n".join(extracted_texts)
-
-        
-
-        
-
-    

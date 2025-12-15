@@ -1,20 +1,21 @@
-import os 
+import os
 import json
 import google.generativeai as genai
 from dotenv import load_dotenv
 
 load_dotenv()
 
+
 class ReceiptAnalyzer:
     def __init__(self):
         api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
             raise ValueError("GOOGLE_API_KEY not found in .env file")
-        
+
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel(
             model_name="gemini-2.5-flash-lite",
-            generation_config={"response_mime_type": "application/json"}
+            generation_config={"response_mime_type": "application/json"},
         )
 
     def parse_receipt(self, raw_text: str) -> dict:

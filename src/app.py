@@ -3,7 +3,8 @@ import os
 import sys
 import pandas as pd
 import altair as alt
-from datetime import  date
+from datetime import date
+from google.api_core.exceptions import ResourceExhausted, ServiceUnavailable
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
@@ -12,11 +13,12 @@ from llm import ReceiptAnalyzer
 from database.db import DatabaseManager
 from database.models import Receipt
 
-#設定
+# 設定
 UPLOAD_DIR = "data/uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 st.set_page_config(page_title="レシート自動仕訳システム", layout="wide")
+
 
 def main():
     st.title("レシート仕訳システム")
@@ -31,12 +33,13 @@ def main():
         if all_records:
             data_list = [
                 {
-                    "date" : r.purchase_date,
-                    "amount" : r.total_amount,
-                    "category" : r.category,
-                    "store" : r.store_name
+                    "date": r.purchase_date,
+                    "amount": r.total_amount,
+                    "category": r.category,
+                    "store": r.store_name,
                 }
-                for r in all_records if r.purchase_date is not None
+                for r in all_records
+                if r.purchase_date is not None
             ]
             df = pd.DataFrame(data_list)
             if not df.empty:
@@ -51,17 +54,23 @@ def main():
     with tab1:
         st.markdown("画像をアップロードすると、自動で内容を読み取り、仕訳を行います")
 
-    # サイドバーに履歴表示
+        # サイドバーに履歴表示
         with st.sidebar:
             st.header("保存済みレシート（最新10件）")
             session = db_manager.get_session()
             try:
                 # 最新10件を取得
-                records = session.query(Receipt).order_by(Receipt.id.desc()).limit(10).all()
+                records = (
+                    session.query(Receipt).order_by(Receipt.id.desc()).limit(10).all()
+                )
 
                 if records:
                     for r in records:
-                        date_str = r.purchase_date.strftime("%Y-%m-%d") if r.purchase_date else "日付不明"
+                        date_str = (
+                            r.purchase_date.strftime("%Y-%m-%d")
+                            if r.purchase_date
+                            else "日付不明"
+                        )
                         st.text(f"ID:{r.id} | {date_str}")
                         st.caption(f"￥{r.total_amount:,} ({r.store_name})")
                         st.divider()
@@ -71,23 +80,29 @@ def main():
                 session.close()
 
         # メイン画面
-        uploaded_file = st.file_uploader("レシート画像をアップロードしてください", type=["jpg","png","webp","jpeg"])
+        uploaded_file = st.file_uploader(
+            "レシート画像をアップロードしてください",
+            type=["jpg", "png", "webp", "jpeg"],
+        )
 
         if uploaded_file is not None:
             file_path = os.path.join(UPLOAD_DIR, uploaded_file.name)
             with open(file_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
 
-            col1, col2 = st.columns([1,1.5])
+            col1, col2 = st.columns([1, 1.5])
 
             with col1:
-                st.image(file_path, caption="アップロード画像", use_container_width=True)
+                st.image(file_path, caption="アップロード画像", width="stretch")
 
             # 解析処理、編集、保存
             with col2:
                 st.subheader("解析結果")
 
-                if "current_image" not in st.session_state or st.session_state["current_image"] != uploaded_file.name:
+                if (
+                    "current_image" not in st.session_state
+                    or st.session_state["current_image"] != uploaded_file.name
+                ):
                     st.session_state["analyzed_data"] = None
                     st.session_state["current_image"] = uploaded_file.name
 
@@ -102,13 +117,28 @@ def main():
                             with st.spinner("構造化データに変換中"):
                                 # LLM解析
                                 analyzer = ReceiptAnalyzer()
-                                result = analyzer.parse_receipt(raw_text)
 
-                                if not result:
-                                    st.error("AI解析に失敗しました")
-                                else:
-                                    st.session_state["analyzed_data"] = result
-                                    st.rerun()
+                                try:
+                                    result = analyzer.parse_receipt(raw_text)
+
+                                    if not result:
+                                        st.error("AI解析に失敗しました")
+                                    else:
+                                        st.session_state["analyzed_data"] = result
+                                        st.rerun()
+
+                                except ResourceExhausted:
+                                    st.error(
+                                        "APIの利用制限に達しました。しばらく時間を空けてから再試行してください。"
+                                    )
+                                except ServiceUnavailable:
+                                    st.error(
+                                        "AIが一時的に利用できません。後程再試行してください。"
+                                    )
+                                except Exception as e:
+                                    st.error(f"予期せぬエラーが発生しました。:{e}")
+                                    print(f"Error Details:{e}")
+
                         else:
                             st.error("文字を読み取れませんでした")
 
@@ -119,43 +149,65 @@ def main():
                         col_a, col_b = st.columns(2)
                         with col_a:
                             # 日付と店名の編集
-                            edited_date = st.text_input("日付（YYYY-MM-DD）", value=data.get("date"))
-                            edited_store = st.text_input("店舗名", value=data.get("store_name"))
+                            edited_date = st.text_input(
+                                "日付（YYYY-MM-DD）", value=data.get("date")
+                            )
+                            edited_store = st.text_input(
+                                "店舗名", value=data.get("store_name")
+                            )
                         with col_b:
                             # 金額とカテゴリの編集
                             init_amount = data.get("total_amount")
-                            if init_amount is None: 
+                            if init_amount is None:
                                 init_amount = 0
-                            edited_amount = st.number_input("合計金額", value=int(init_amount))
+                            edited_amount = st.number_input(
+                                "合計金額", value=int(init_amount)
+                            )
 
-                            categories = ["食費", "日用品","交通費","交際費","その他"]
-                            current_cat = data.get("category","その他")
+                            categories = [
+                                "食費",
+                                "日用品",
+                                "交通費",
+                                "交際費",
+                                "その他",
+                            ]
+                            current_cat = data.get("category", "その他")
 
-                            cat_index = categories.index(current_cat) if current_cat in categories else 4
-                            edited_category = st.selectbox("カテゴリ", categories, index=cat_index)
+                            cat_index = (
+                                categories.index(current_cat)
+                                if current_cat in categories
+                                else 4
+                            )
+                            edited_category = st.selectbox(
+                                "カテゴリ", categories, index=cat_index
+                            )
 
                         st.markdown("---")
                         st.caption("明細データ（自動抽出）")
-                        items_df =pd.DataFrame(data.get("items",[]))
+                        items_df = pd.DataFrame(data.get("items", []))
                         if not items_df.empty:
-                            st.dataframe(items_df, hide_index=True, use_container_width=True)
+                            st.dataframe(items_df, hide_index=True, width="stretch")
                         else:
                             st.info("明細は検出されませんでした")
 
                         st.markdown("---")
-                        submitted = st.form_submit_button("この内容でデータベースに保存", type="primary")
+                        submitted = st.form_submit_button(
+                            "この内容でデータベースに保存", type="primary"
+                        )
 
                         if submitted:
                             final_data = {
                                 "store_name": edited_store,
                                 "date": edited_date,
-                                "total_amount" : edited_amount,
-                                "category" : edited_category,
-                                "items" : data.get("items",[])
-                            }  
+                                "total_amount": edited_amount,
+                                "category": edited_category,
+                                "items": data.get("items", []),
+                            }
                             try:
                                 # DB保存
-                                saved_record = db_manager.save_receipt(final_data, file_path)
+                                saved_record = db_manager.save_receipt(
+                                    final_data, file_path
+                                )
                                 st.success(f"保存しました(ID:{saved_record.id})")
 
                                 st.session_state["analyzed_data"] = None
@@ -178,7 +230,7 @@ def main():
 
             # 日付計算
             today = date.today()
-            this_month_start = pd.to_datetime(date(today.year, today.month,1))
+            this_month_start = pd.to_datetime(date(today.year, today.month, 1))
             last_month_start = this_month_start - pd.DateOffset(months=1)
             next_month_start = this_month_start + pd.DateOffset(months=1)
 
@@ -186,21 +238,30 @@ def main():
             total_expense = df["amount"].sum()
 
             # 今月の支出
-            this_month_df = df[(df["date"] >= this_month_start) & (df["date"] < next_month_start)]
+            this_month_df = df[
+                (df["date"] >= this_month_start) & (df["date"] < next_month_start)
+            ]
             this_month_total = this_month_df["amount"].sum()
 
             # 先月の支出
-            last_month_df = df[(df["date"] >= last_month_start) & (df["date"] < this_month_start)]
-            last_month_total = last_month_df["amount"].sum() 
+            last_month_df = df[
+                (df["date"] >= last_month_start) & (df["date"] < this_month_start)
+            ]
+            last_month_total = last_month_df["amount"].sum()
 
             # 前月比計算
             diff = this_month_total - last_month_total
 
-            # 数値表示   
+            # 数値表示
             kpi1, kpi2, kpi3 = st.columns(3)
             kpi1.metric("全期間の支出合計", f"￥{total_expense:,.0f}")
             kpi2.metric("今月の支出", f"￥{this_month_total:,.0f}")
-            kpi3.metric("前月比", f"￥{diff:,.0f}", delta=f"{diff:,.0f}円", delta_color="inverse")
+            kpi3.metric(
+                "前月比",
+                f"￥{diff:,.0f}",
+                delta=f"{diff:,.0f}円",
+                delta_color="inverse",
+            )
 
             st.divider()
 
@@ -212,14 +273,19 @@ def main():
                 st.subheader("カテゴリ別割合")
                 category_sum = df.groupby("category", as_index=False)["amount"].sum()
 
-                pie_chart = alt.Chart(category_sum).mark_arc(innerRadius=50).encode(
-                    theta=alt.Theta(field="amount", type="quantitative"),
-                    color=alt.Color(field="category", type="nominal"),
-                    tooltip=["category","amount"],
-                    order=alt.Order("amount",sort="descending")
-                ).properties(title="カテゴリ別支出構成")
+                pie_chart = (
+                    alt.Chart(category_sum)
+                    .mark_arc(innerRadius=50)
+                    .encode(
+                        theta=alt.Theta(field="amount", type="quantitative"),
+                        color=alt.Color(field="category", type="nominal"),
+                        tooltip=["category", "amount"],
+                        order=alt.Order("amount", sort="descending"),
+                    )
+                    .properties(title="カテゴリ別支出構成")
+                )
 
-                st.altair_chart(pie_chart, use_container_width=True)
+                st.altair_chart(pie_chart, width="stretch")
 
             # 月別支出推移
             with chart_col2:
@@ -229,8 +295,8 @@ def main():
                 st.line_chart(monthly_trend)
 
             with st.expander("全データリストを見る"):
-                st.dataframe(df.sort_values("date", ascending=False), use_container_width=True)
-                
+                st.dataframe(df.sort_values("date", ascending=False), width="stretch")
+
 
 if __name__ == "__main__":
     main()

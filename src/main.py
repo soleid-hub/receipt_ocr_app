@@ -7,6 +7,7 @@ from ocr import OCRProcessor
 from llm import ReceiptAnalyzer
 from database.db import DatabaseManager
 
+
 def main():
     # 画像パス
     image_path = "data/receipt_sample.jpg"
@@ -14,7 +15,7 @@ def main():
     if not os.path.exists(image_path):
         print(f"Error: {image_path} not found.")
         return
-    
+
     # OCR実行
     print(f"Processing image: {image_path}")
     ocr_engine = OCRProcessor()
@@ -43,9 +44,10 @@ def main():
         print(f"Date: {saved_record.purchase_date}")
         print(f"Amount: ￥{saved_record.total_amount}")
         print(f"Category: {saved_record.category}")
-    
+
     except Exception as e:
         print(f"[ERROR] Failed to save to database: {e}")
+
 
 if __name__ == "__main__":
     main()
