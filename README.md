@@ -6,6 +6,10 @@
 
 Repository URL : https://github.com/soleid-hub/receipt_ocr_app
 
+### 動作デモ
+![動作デモ](demo.gif) 
+*※解析中の待ち時間は4倍速で表示しています。*
+
 2.仕様技術
 
 モダンな開発フローと保守性を重視し、以下の技術を選定しました。
