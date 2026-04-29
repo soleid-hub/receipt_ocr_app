@@ -34,7 +34,7 @@ Frontend
 
 Quality Control
 ・Linter/Formatter: Ruff
-    選定理由：高速な解析により、型品との共生やコード規約の統一を効率的に行うため。
+    選定理由：高速な解析により、型ヒントの共存やコード規約の統一を効率的に行うため。
 
 3.システム構成図
 
@@ -56,4 +56,4 @@ Quality Control
 ・コード品質
     ・Ruffによる厳格なLintチェックとフォーマット。
 ・環境再現性
-    ・devcontainer.jsonにより、拡張機能や依存ライブラリを含めた開発環境路コード管理。
+    ・devcontainer.jsonにより、拡張機能や依存ライブラリを含めた開発環境のコード管理。
